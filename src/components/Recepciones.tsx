@@ -362,7 +362,7 @@ export default function Recepciones() {
                   Cancelar
                 </button>
                 <button onClick={() => setShowNewUser(false)} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: "#00A651" }}>
-                  Guardar (demo)
+                  Guardar 
                 </button>
               </div>
             </div>
