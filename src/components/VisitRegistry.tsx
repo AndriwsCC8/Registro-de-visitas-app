@@ -1,7 +1,60 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AppUser } from "../App";
 
 type Status = "Activa" | "Completada" | "Cancelada" | "Pendiente";
+type VisitorType = "Ciudadano" | "Invitado" | "Reunión institucional" | "Proveedor" | "Consultor" | "Contratista" | "Contratista permanente" | "Autoridad" | "Tecnico";
+type AutomaticStatus = "Activo" | "Pendiente de salida" | "Salida confirmada" | "Excedió tiempo permitido";
+
+const visitorTypes: { label: VisitorType; defaultMinutes: number | null }[] = [
+  { label: "Ciudadano", defaultMinutes: 60 },
+  { label: "Invitado", defaultMinutes: 120 },
+  { label: "Reunión institucional", defaultMinutes: 180 },
+  { label: "Proveedor", defaultMinutes: 240 },
+  { label: "Consultor", defaultMinutes: 480 },
+  { label: "Contratista", defaultMinutes: 600 },
+  { label: "Contratista permanente", defaultMinutes: null },
+  { label: "Autoridad", defaultMinutes: 120 },
+  { label: "Tecnico", defaultMinutes: 240 },
+];
+
+const ALERT_TOLERANCE_MINUTES = 60;
+
+function formatDuration(minutes: number | null) {
+  if (minutes === null) return "Sin alerta automática";
+  if (minutes % 60 === 0) return `${minutes / 60} ${minutes === 60 ? "hora" : "horas"}`;
+  return `${minutes} minutos`;
+}
+
+const detailedEquipmentOptions = ["Laptop", "Proyector", "Tablet", "Cámara Fotográfica", "Disco Duro Externo"];
+
+function getCurrentTime() {
+  return new Date().toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function getExpectedExitAt(visit: Visit) {
+  if (visit.estimatedMinutes === null) return null;
+  const expectedExit = new Date(visit.entryAt);
+  expectedExit.setMinutes(expectedExit.getMinutes() + visit.estimatedMinutes);
+
+  if (visit.endDate) {
+    const authorizedEnd = new Date(`${visit.endDate}T23:59:59`);
+    if (authorizedEnd > expectedExit) return authorizedEnd;
+  }
+
+  return expectedExit;
+}
+
+function getAutomaticStatus(visit: Visit, now: Date): AutomaticStatus {
+  if (visit.exitConfirmed === "Sí") return "Salida confirmada";
+  if (visit.status === "Pendiente") return "Pendiente de salida";
+
+  const expectedExit = getExpectedExitAt(visit);
+  if (expectedExit && now.getTime() > expectedExit.getTime() + ALERT_TOLERANCE_MINUTES * 60_000) {
+    return "Excedió tiempo permitido";
+  }
+
+  return "Activo";
+}
 
 interface Visit {
   id: string;
@@ -19,6 +72,13 @@ interface Visit {
   entry: string;
   exit: string;
   status: Status;
+  automaticStatus: AutomaticStatus;
+  visitorType: VisitorType;
+  estimatedMinutes: number | null;
+  equipmentDetails: Record<string, { brand: string; model: string; serial: string }>;
+  endDate?: string;
+  entryAt: string;
+  exitConfirmed: "Sí" | "No";
   notes?: string;
   branch: string;
 }
@@ -36,20 +96,33 @@ const gerencias = [
   "Gerencia de Planificación y Desarrollo",
 ];
 
-const pisos = ["Piso 1", "Piso 2", "Piso 3", "Piso 4"];
+const centralFloors = ["Piso 1", "Piso 2", "Piso 3", "Piso 4", "Casita 1", "Casita 2"];
 const equipmentOptions = ["Laptop", "Proyector", "Tablet", "Cámara Fotográfica", "Disco Duro Externo", "Herramientas", "Otro"];
 
+const getTodayAt = (time: string) => {
+  const current = new Date();
+  const today = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}-${String(current.getDate()).padStart(2, "0")}`;
+  return `${today}T${time}:00`;
+};
+
 const initialVisits: Visit[] = [
-  { id: "V-00234", name: "Carlos Rodríguez", cedula: "001-1234567-8", phone: "809-555-0101", host: "Dr. Pérez", gerencia: "Gerencia de Salud", dept: "Área Médica", purpose: "Consulta Médica", piso: "Piso 2", carnet: "C-042", equipment: "Laptop Dell", entry: "09:14", exit: "--", status: "Activa", branch: "Sede Central" },
-  { id: "V-00233", name: "María González", cedula: "002-9876543-1", phone: "829-555-0202", host: "Lic. Martínez", dept: "Administración", purpose: "Administrativo", piso: "Piso 1", carnet: "C-041", entry: "09:02", exit: "--", status: "Activa", branch: "Sucursal Norte" },
-  { id: "V-00232", name: "Pedro Jiménez", cedula: "001-5556677-4", phone: "849-555-0303", host: "Ing. Sánchez", gerencia: "Gerencia de Tecnología de la Información", dept: "TI", purpose: "Soporte Técnico", piso: "Piso 3", carnet: "C-040", equipment: "Maletín de herramientas de red", entry: "08:47", exit: "10:15", status: "Completada", branch: "Sede Central" },
-  { id: "V-00231", name: "Lucía Fernández", cedula: "001-3334455-2", phone: "809-555-0404", host: "Dr. Vargas", gerencia: "Gerencia de Salud", dept: "Área Médica", purpose: "Consulta Médica", piso: "Piso 2", carnet: "C-039", entry: "08:35", exit: "09:55", status: "Completada", branch: "Sede Central" },
-  { id: "V-00230", name: "Juan Herrera", cedula: "002-7778899-5", phone: "829-555-0505", host: "Lic. Torres", dept: "RRHH", purpose: "Entrega de Documentos", piso: "Piso 1", carnet: "C-038", entry: "08:20", exit: "08:50", status: "Completada", branch: "Sucursal Norte" },
-  { id: "V-00229", name: "Rosa Méndez", cedula: "001-2223334-3", phone: "849-555-0606", host: "Dir. Castro", gerencia: "Gerencia General", dept: "Dirección", purpose: "Reunión", piso: "Piso 4", carnet: "C-037", entry: "08:00", exit: "11:30", status: "Completada", branch: "Sede Central" },
-  { id: "V-00228", name: "Andrés Morales", cedula: "002-4445556-7", phone: "809-555-0707", host: "Lic. Reyes", gerencia: "Gerencia Administrativa y Financiera", dept: "Finanzas", purpose: "Auditoría", piso: "Piso 3", carnet: "--", entry: "07:45", exit: "--", status: "Pendiente", branch: "Sede Central" },
+  { id: "V-00234", name: "Carlos Rodríguez", cedula: "001-1234567-8", phone: "809-555-0101", host: "Dr. Pérez", gerencia: "Gerencia de Salud", dept: "Área Médica", purpose: "Consulta Médica", piso: "Piso 2", carnet: "C-042", equipment: "Laptop Dell", entry: "09:14", exit: "--", status: "Activa", automaticStatus: "Activo", visitorType: "Ciudadano", estimatedMinutes: 60, equipmentDetails: {}, entryAt: getTodayAt("09:14"), exitConfirmed: "No", branch: "Sede Central" },
+  { id: "V-00233", name: "María González", cedula: "002-9876543-1", phone: "829-555-0202", host: "Lic. Martínez", dept: "Administración", purpose: "Administrativo", piso: "Piso 1", carnet: "C-041", entry: "09:02", exit: "--", status: "Activa", automaticStatus: "Activo", visitorType: "Proveedor", estimatedMinutes: 240, equipmentDetails: {}, entryAt: getTodayAt("09:02"), exitConfirmed: "No", branch: "Sucursal Norte" },
+  { id: "V-00232", name: "Pedro Jiménez", cedula: "001-5556677-4", phone: "849-555-0303", host: "Ing. Sánchez", gerencia: "Gerencia de Tecnología de la Información", dept: "TI", purpose: "Soporte Técnico", piso: "Piso 3", carnet: "C-040", equipment: "Maletín de herramientas de red", entry: "08:47", exit: "10:15", status: "Completada", automaticStatus: "Salida confirmada", visitorType: "Contratista", estimatedMinutes: 600, equipmentDetails: {}, entryAt: getTodayAt("08:47"), exitConfirmed: "Sí", branch: "Sede Central" },
+  { id: "V-00231", name: "Lucía Fernández", cedula: "001-3334455-2", phone: "809-555-0404", host: "Dr. Vargas", gerencia: "Gerencia de Salud", dept: "Área Médica", purpose: "Consulta Médica", piso: "Piso 2", carnet: "C-039", entry: "08:35", exit: "09:55", status: "Completada", automaticStatus: "Salida confirmada", visitorType: "Ciudadano", estimatedMinutes: 60, equipmentDetails: {}, entryAt: getTodayAt("08:35"), exitConfirmed: "Sí", branch: "Sede Central" },
+  { id: "V-00230", name: "Juan Herrera", cedula: "002-7778899-5", phone: "829-555-0505", host: "Lic. Torres", dept: "RRHH", purpose: "Entrega de Documentos", piso: "Piso 1", carnet: "C-038", entry: "08:20", exit: "08:50", status: "Completada", automaticStatus: "Salida confirmada", visitorType: "Proveedor", estimatedMinutes: 240, equipmentDetails: {}, entryAt: getTodayAt("08:20"), exitConfirmed: "Sí", branch: "Sucursal Norte" },
+  { id: "V-00229", name: "Rosa Méndez", cedula: "001-2223334-3", phone: "849-555-0606", host: "Dir. Castro", gerencia: "Gerencia General", dept: "Dirección", purpose: "Reunión", piso: "Piso 4", carnet: "C-037", entry: "08:00", exit: "11:30", status: "Completada", automaticStatus: "Salida confirmada", visitorType: "Reunión institucional", estimatedMinutes: 180, equipmentDetails: {}, entryAt: getTodayAt("08:00"), exitConfirmed: "Sí", branch: "Sede Central" },
+  { id: "V-00228", name: "Andrés Morales", cedula: "002-4445556-7", phone: "809-555-0707", host: "Lic. Reyes", gerencia: "Gerencia Administrativa y Financiera", dept: "Finanzas", purpose: "Auditoría", piso: "Piso 3", carnet: "--", entry: "07:45", exit: "--", status: "Pendiente", automaticStatus: "Pendiente de salida", visitorType: "Consultor", estimatedMinutes: 480, equipmentDetails: {}, entryAt: getTodayAt("07:45"), exitConfirmed: "No", branch: "Sede Central" },
 ];
 
-const statusColors: Record<Status, { bg: string; color: string }> = {
+const statusColors: Record<AutomaticStatus, { bg: string; color: string }> = {
+  Activo: { bg: "#E8F5EE", color: "#00A651" },
+  "Pendiente de salida": { bg: "#FEF3C7", color: "#F59E0B" },
+  "Salida confirmada": { bg: "#EFF6FF", color: "#00A651" },
+  "Excedió tiempo permitido": { bg: "#FEE2E2", color: "#DC2626" },
+};
+
+const legacyStatusColors: Record<Status, { bg: string; color: string }> = {
   Activa: { bg: "#E8F5EE", color: "#00A651" },
   Completada: { bg: "#EFF6FF", color: "#00A651" },
   Cancelada: { bg: "#FEE2E2", color: "#DC2626" },
@@ -59,21 +132,27 @@ const statusColors: Record<Status, { bg: string; color: string }> = {
 interface FormData {
   name: string; cedula: string; phone: string; gerencia: string; dept: string; host: string;
   purpose: string; purposeDetail: string; piso: string; carnet: string; notes: string;
+  visitorType: VisitorType | ""; estimatedMinutes: number | null; endDate: string;
+  entryTime: string;
+  equipmentDetails: Record<string, { brand: string; model: string; serial: string }>;
   hasEquipment: boolean; equipmentTypes: string[]; equipmentOtherDetail: string;
   laptopBrand: string; laptopModel: string; laptopSerial: string;
 }
 
 const empty: FormData = {
   name: "", cedula: "", phone: "", gerencia: "", dept: "", host: "",
-  purpose: "", purposeDetail: "", piso: "", carnet: "", notes: "",
+  purpose: "", purposeDetail: "", piso: "", carnet: "", notes: "", visitorType: "", estimatedMinutes: null, endDate: "",
+  equipmentDetails: {},
   hasEquipment: false, equipmentTypes: [], equipmentOtherDetail: "",
   laptopBrand: "", laptopModel: "", laptopSerial: "",
+  entryTime: getCurrentTime(),
 };
 const depts = ["Área Médica", "Administración", "TI", "RRHH", "Finanzas", "Dirección", "Operaciones"];
 const purposes = ["Consulta Médica", "Administrativo", "Entrega de Documentos", "Reunión", "Soporte Técnico", "Visita Personal", "Auditoría", "Otro"];
 
 export default function VisitRegistry({ user }: { user: AppUser }) {
   const [visits, setVisits] = useState<Visit[]>(initialVisits);
+  const [now, setNow] = useState(() => new Date());
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FormData>(empty);
   const [formError, setFormError] = useState("");
@@ -81,13 +160,24 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
   const [search, setSearch] = useState("");
   const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
 
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
   const showGerencia = GERENCIA_BRANCHES.includes(user.branch);
+  const floors = user.branch === "Sede Central" ? centralFloors : [];
 
   const filtered = visits.filter((v) => {
     const matchStatus = filterStatus === "Todas" || v.status === filterStatus;
     const matchSearch = search === "" || v.name.toLowerCase().includes(search.toLowerCase()) || v.cedula.includes(search);
     const matchBranch = user.role === "Administrador" || v.branch === user.branch;
     return matchStatus && matchSearch && matchBranch;
+  });
+
+  const overdueVisits = visits.filter((visit) => {
+    const visibleToUser = user.role === "Administrador" || visit.branch === user.branch;
+    return visibleToUser && getAutomaticStatus(visit, now) === "Excedió tiempo permitido";
   });
 
   // Un carnet solo puede reutilizarse una vez se registra la salida de quien lo tenía asignado.
@@ -103,11 +193,38 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
     }));
   };
 
+  const updateVisitorType = (visitorType: VisitorType | "") => {
+    const selectedType = visitorTypes.find((type) => type.label === visitorType);
+    setForm({
+      ...form,
+      visitorType,
+      estimatedMinutes: selectedType?.defaultMinutes ?? null,
+    });
+  };
+
+  const updateEquipmentDetail = (equipment: string, field: "brand" | "model" | "serial", value: string) => {
+    setForm((prev) => ({
+      ...prev,
+      equipmentDetails: {
+        ...prev.equipmentDetails,
+        [equipment]: {
+          brand: prev.equipmentDetails[equipment]?.brand ?? "",
+          model: prev.equipmentDetails[equipment]?.model ?? "",
+          serial: prev.equipmentDetails[equipment]?.serial ?? "",
+          [field]: value,
+        },
+      },
+    }));
+  };
+
   const buildEquipmentSummary = (f: FormData) => {
     if (!f.hasEquipment || f.equipmentTypes.length === 0) return undefined;
     return f.equipmentTypes
       .map((t) => {
-        if (t === "Laptop") return `Laptop (${f.laptopBrand} ${f.laptopModel}, S/N: ${f.laptopSerial})`;
+        if (detailedEquipmentOptions.includes(t)) {
+          const detail = f.equipmentDetails[t];
+          return `${t} (${detail?.brand} ${detail?.model}, S/N: ${detail?.serial})`;
+        }
         if (t === "Otro") return f.equipmentOtherDetail ? `Otro: ${f.equipmentOtherDetail}` : "Otro";
         return t;
       })
@@ -121,8 +238,12 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
   };
 
   const handleSubmit = () => {
-    if (!form.name || !form.cedula || !form.host || !form.carnet || !form.piso || !form.purpose) {
+    if (!form.name || !form.cedula || !form.host || !form.carnet || !form.piso || !form.purpose || !form.visitorType) {
       setFormError("Completa todos los campos obligatorios.");
+      return;
+    }
+    if (form.visitorType === "Contratista permanente" && !form.endDate) {
+      setFormError("Selecciona la fecha fin prevista para el contratista permanente.");
       return;
     }
     if (showGerencia && !form.gerencia) {
@@ -142,8 +263,12 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
         setFormError("Selecciona al menos un tipo de equipo.");
         return;
       }
-      if (form.equipmentTypes.includes("Laptop") && (!form.laptopBrand || !form.laptopModel || !form.laptopSerial)) {
-        setFormError("Para la laptop, indica marca, modelo y serial.");
+      const missingEquipmentDetails = detailedEquipmentOptions.find((equipment) => {
+        const detail = form.equipmentDetails[equipment];
+        return form.equipmentTypes.includes(equipment) && (!detail?.brand || !detail?.model || !detail?.serial);
+      });
+      if (missingEquipmentDetails) {
+        setFormError(`Para ${missingEquipmentDetails.toLowerCase()}, indica marca, modelo y serial.`);
         return;
       }
       if (form.equipmentTypes.includes("Otro") && !form.equipmentOtherDetail) {
@@ -151,6 +276,7 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
         return;
       }
     }
+    const entryTime = getCurrentTime();
     const newVisit: Visit = {
       id: `V-${String(visits.length + 235).padStart(5, "0")}`,
       name: form.name,
@@ -164,9 +290,16 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
       piso: form.piso,
       carnet: form.carnet,
       equipment: buildEquipmentSummary(form),
-      entry: new Date().toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" }),
+      entry: entryTime,
       exit: "--",
       status: "Activa",
+      automaticStatus: "Activo",
+      visitorType: form.visitorType,
+      estimatedMinutes: form.estimatedMinutes,
+      equipmentDetails: form.equipmentDetails,
+      endDate: form.visitorType === "Contratista permanente" ? form.endDate : undefined,
+      entryAt: getTodayAt(entryTime),
+      exitConfirmed: "No",
       notes: form.notes,
       branch: user.branch,
     };
@@ -175,7 +308,7 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
   };
 
   const handleCheckout = (id: string) => {
-    setVisits(visits.map((v) => v.id === id ? { ...v, status: "Completada" as Status, exit: new Date().toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" }) } : v));
+    setVisits(visits.map((v) => v.id === id ? { ...v, status: "Completada" as Status, automaticStatus: "Salida confirmada", exit: new Date().toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" }), exitConfirmed: "Sí" } : v));
     setSelectedVisit(null);
   };
 
@@ -222,19 +355,48 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
         </div>
       </div>
 
+      {overdueVisits.length > 0 && (
+        <div className="rounded-2xl border px-5 py-4" style={{ borderColor: "#FCA5A5", background: "#FEF2F2" }} role="alert">
+          <div className="flex items-start gap-3">
+            <span className="material-symbols-outlined shrink-0" style={{ color: "#DC2626", fontSize: 22 }}>warning</span>
+            <div className="flex-1">
+              <p className="text-sm font-bold" style={{ color: "#991B1B" }}>
+                {overdueVisits.length === 1 ? "Hay 1 visita que excedió el tiempo estimado" : `Hay ${overdueVisits.length} visitas que excedieron el tiempo estimado`}
+              </p>
+              <p className="text-xs mt-1" style={{ color: "#B91C1C" }}>
+                Verifica si el visitante aún permanece en las instalaciones y registra la salida manualmente.
+              </p>
+              <div className="flex flex-wrap gap-2 mt-3">
+                {overdueVisits.map((visit) => (
+                  <button
+                    key={visit.id}
+                    onClick={() => setSelectedVisit(visit)}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg border"
+                    style={{ borderColor: "#FCA5A5", background: "#FFFFFF", color: "#B91C1C" }}
+                  >
+                    {visit.name} · Registrar salida
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white rounded-2xl shadow-sm border overflow-hidden" style={{ borderColor: "#D1DDED" }}>
         <table className="w-full">
           <thead>
             <tr style={{ background: "#F8FAFC" }}>
-              {["ID", "Visitante", "Cédula", "Persona a quien visita", "Departamento", "Motivo", "Entrada", "Salida", "Carnet", "Estado", "Acción"].map((h) => (
+                {["ID", "Visitante", "Cédula", "Persona a quien visita", "Departamento", "Motivo", "Entrada", "Salida", "Carnet", "Tipo de visitante", "Tiempo estimado", "Salida Confirmada", "Estado", "Acción"].map((h) => (
                 <th key={h} className="px-4 py-3 text-left text-xs font-semibold" style={{ color: "#5A7099" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {filtered.map((v) => {
-              const sc = statusColors[v.status];
+              const automaticStatus = getAutomaticStatus(v, now);
+              const sc = statusColors[automaticStatus];
               return (
                 <tr
                   key={v.id}
@@ -266,11 +428,14 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
                   <td className="px-4 py-3">
                     <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: "#E8EFF8", color: "#00A651" }}>{v.carnet}</span>
                   </td>
+                  <td className="px-4 py-3 text-xs" style={{ color: "#5A7099" }}>{v.visitorType}</td>
+                  <td className="px-4 py-3 text-xs" style={{ color: "#5A7099" }}>{formatDuration(v.estimatedMinutes)}</td>
+                  <td className="px-4 py-3 text-xs font-semibold" style={{ color: v.exitConfirmed === "Sí" ? "#00A651" : "#DC2626" }}>{v.exitConfirmed}</td>
                   <td className="px-4 py-3">
-                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: sc.bg, color: sc.color }}>{v.status}</span>
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: sc.bg, color: sc.color }}>{automaticStatus}</span>
                   </td>
                   <td className="px-4 py-3">
-                    {v.status === "Activa" && (
+                    {v.exitConfirmed === "No" && v.status !== "Cancelada" && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleCheckout(v.id); }}
                         className="text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors"
@@ -289,6 +454,11 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
           <div className="py-12 text-center" style={{ color: "#5A7099" }}>
             <span className="material-symbols-outlined" style={{ fontSize: 40 }}>search_off</span>
             <p className="text-sm mt-2">No se encontraron visitas</p>
+            <p className="text-xs mt-1">
+              {search || filterStatus !== "Todas"
+                ? "Prueba cambiar la búsqueda o el filtro de estado."
+                : `No hay visitas demo registradas para ${user.branch}.`}
+            </p>
           </div>
         )}
       </div>
@@ -314,12 +484,44 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
                 <Field label="Cédula *" value={form.cedula} onChange={(v) => setForm({ ...form, cedula: v })} placeholder="000-0000000-0" />
                 <Field label="Teléfono" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} placeholder="809-000-0000" />
                 <Field label="Número de Carnet *" value={form.carnet} onChange={(v) => setForm({ ...form, carnet: v })} placeholder="Ej. C-045" />
+                <SelectField label="Tipo de visitante *" value={form.visitorType} onChange={(v) => updateVisitorType(v as VisitorType | "")} options={visitorTypes.map((type) => type.label)} />
+                <div>
+                  <label className="block text-sm font-semibold mb-1.5" style={{ color: "#5A7099" }}>Tiempo estimado *</label>
+                  {form.visitorType === "Tecnico" ? (
+                    <div className="flex items-center gap-2">
+                      <input type="number" min="1" step="0.5" value={(form.estimatedMinutes ?? 240) / 60}
+                        onChange={(e) => setForm({ ...form, estimatedMinutes: Math.max(0.5, Number(e.target.value)) * 60 })}
+                        className="w-full px-3.5 py-2.5 rounded-xl border text-base outline-none" style={{ borderColor: "#D1DDED", color: "#0D1B3E" }} />
+                      <span className="text-sm" style={{ color: "#5A7099" }}>horas</span>
+                    </div>
+                  ) : (
+                    <div className="w-full px-3.5 py-2.5 rounded-xl border text-base" style={{ borderColor: "#D1DDED", color: "#0D1B3E", background: "#F8FAFC" }}>
+                      {formatDuration(form.estimatedMinutes)}
+                    </div>
+                  )}
+                </div>
+                {form.visitorType === "Contratista permanente" && (
+                  <div>
+                    <label className="block text-sm font-semibold mb-1.5" style={{ color: "#5A7099" }}>Fecha fin prevista *</label>
+                    <input type="date" value={form.endDate} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border text-base outline-none" style={{ borderColor: "#D1DDED", color: "#0D1B3E" }} />
+                  </div>
+                )}
                 {showGerencia && (
                   <SelectField label="Gerencia *" value={form.gerencia} onChange={(v) => setForm({ ...form, gerencia: v })} options={gerencias} />
                 )}
                 <SelectField label="Departamento *" value={form.dept} onChange={(v) => setForm({ ...form, dept: v })} options={depts} />
                 <Field label="Persona a quien visita *" value={form.host} onChange={(v) => setForm({ ...form, host: v })} placeholder="Nombre del empleado" />
-                <SelectField label="Piso a Visitar *" value={form.piso} onChange={(v) => setForm({ ...form, piso: v })} options={pisos} />
+                {floors.length > 0 ? (
+                  <SelectField label="Piso a Visitar *" value={form.piso} onChange={(v) => setForm({ ...form, piso: v })} options={floors} />
+                ) : (
+                  <div>
+                    <label className="block text-sm font-semibold mb-1.5" style={{ color: "#5A7099" }}>Piso a Visitar *</label>
+                    <div className="w-full px-3.5 py-2.5 rounded-xl border text-sm" style={{ borderColor: "#FCD34D", color: "#92400E", background: "#FFFBEB" }}>
+                      Los pisos de esta sucursal se configurarán cuando estén definidos en el backend.
+                    </div>
+                  </div>
+                )}
                 <SelectField label="Motivo de Visita *" value={form.purpose} onChange={(v) => setForm({ ...form, purpose: v })} options={purposes} />
               </div>
               {form.purpose === "Otro" && (
@@ -352,12 +554,21 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
                         </label>
                       ))}
                     </div>
-                    {form.equipmentTypes.includes("Laptop") && (
-                      <div className="grid grid-cols-3 gap-3 rounded-xl p-3" style={{ background: "#F8FAFC" }}>
-                        <Field label="Marca *" value={form.laptopBrand} onChange={(v) => setForm({ ...form, laptopBrand: v })} placeholder="Ej. Dell" />
-                        <Field label="Modelo *" value={form.laptopModel} onChange={(v) => setForm({ ...form, laptopModel: v })} placeholder="Ej. Latitude 5420" />
-                        <Field label="Serial *" value={form.laptopSerial} onChange={(v) => setForm({ ...form, laptopSerial: v })} placeholder="Ej. SN-83920XK" />
-                      </div>
+                    {form.equipmentTypes.filter((type) => detailedEquipmentOptions.includes(type)).map((equipment) => {
+                      const detail = form.equipmentDetails[equipment] ?? { brand: "", model: "", serial: "" };
+                      return (
+                        <div key={equipment} className="rounded-xl p-3" style={{ background: "#F8FAFC" }}>
+                          <p className="text-xs font-semibold mb-2" style={{ color: "#5A7099" }}>{equipment}</p>
+                          <div className="grid grid-cols-3 gap-3">
+                            <Field label="Marca *" value={detail.brand} onChange={(value) => updateEquipmentDetail(equipment, "brand", value)} placeholder="Ej. Dell" />
+                            <Field label="Modelo *" value={detail.model} onChange={(value) => updateEquipmentDetail(equipment, "model", value)} placeholder="Ej. Latitude 5420" />
+                            <Field label="Serial *" value={detail.serial} onChange={(value) => updateEquipmentDetail(equipment, "serial", value)} placeholder="Ej. SN-83920XK" />
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {form.equipmentTypes.includes("Herramientas") && (
+                      <p className="text-xs" style={{ color: "#5A7099" }}>Herramientas no requiere marca, modelo ni serial.</p>
                     )}
                     {form.equipmentTypes.includes("Otro") && (
                       <Field label="Especifique el Equipo *" value={form.equipmentOtherDetail} onChange={(v) => setForm({ ...form, equipmentOtherDetail: v })} placeholder="Describa el equipo" />
@@ -413,7 +624,11 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 {[
                   ["Carnet", selectedVisit.carnet],
-                  ["Estado", selectedVisit.status],
+                  ["Estado automático", getAutomaticStatus(selectedVisit, now)],
+                  ["Salida confirmada", selectedVisit.exitConfirmed],
+                  ["Tipo de visitante", selectedVisit.visitorType],
+                  ["Tiempo estimado", formatDuration(selectedVisit.estimatedMinutes)],
+                  selectedVisit.endDate ? ["Fecha fin prevista", selectedVisit.endDate] : null,
                   ["Persona a quien visita", selectedVisit.host],
                   selectedVisit.gerencia ? ["Gerencia", selectedVisit.gerencia] : null,
                   ["Departamento", selectedVisit.dept],

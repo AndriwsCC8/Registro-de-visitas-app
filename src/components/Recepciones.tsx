@@ -17,7 +17,7 @@ interface VisitaDemo {
   status: "Activa" | "Completada";
 }
 
-interface Sucursal {
+interface Regional {
   id: string;
   name: string;
   provincia: string;
@@ -30,7 +30,7 @@ interface Sucursal {
 }
 
 // Datos demo basados en los centros y puntos de servicio de SeNaSa a nivel nacional.
-const sucursales: Sucursal[] = [
+const regionales: Regional[] = [
   {
     id: "central",
     name: "Sede Central",
@@ -50,7 +50,7 @@ const sucursales: Sucursal[] = [
   },
   {
     id: "santiago",
-    name: "Sucursal Santiago",
+    name: "Regional Santiago",
     provincia: "Santiago",
     direccion: "Av. 27 de Febrero, Santiago de los Caballeros",
     telefono: "809-580-1122",
@@ -63,7 +63,7 @@ const sucursales: Sucursal[] = [
   },
   {
     id: "sfm",
-    name: "Sucursal San Francisco de Macorís",
+    name: "Regional San Francisco de Macorís",
     provincia: "Duarte",
     direccion: "Calle Duarte esq. Mella, San Francisco de Macorís",
     telefono: "809-588-3344",
@@ -76,7 +76,7 @@ const sucursales: Sucursal[] = [
   },
   {
     id: "lavega",
-    name: "Sucursal La Vega",
+    name: "Regional La Vega",
     provincia: "La Vega",
     direccion: "Av. Padre Adolfo, La Vega",
     telefono: "809-573-5566",
@@ -87,7 +87,7 @@ const sucursales: Sucursal[] = [
   },
   {
     id: "puertoplata",
-    name: "Sucursal Puerto Plata",
+    name: "Regional Puerto Plata",
     provincia: "Puerto Plata",
     direccion: "Av. Circunvalación Norte, Puerto Plata",
     telefono: "809-586-7788",
@@ -98,7 +98,7 @@ const sucursales: Sucursal[] = [
   },
   {
     id: "sanpedro",
-    name: "Sucursal San Pedro de Macorís",
+    name: "Regional San Pedro de Macorís",
     provincia: "San Pedro de Macorís",
     direccion: "Av. Independencia, San Pedro de Macorís",
     telefono: "809-529-9900",
@@ -109,7 +109,7 @@ const sucursales: Sucursal[] = [
   },
   {
     id: "barahona",
-    name: "Sucursal Barahona",
+    name: "Regional Barahona",
     provincia: "Barahona",
     direccion: "Av. Enriquillo, Barahona",
     telefono: "809-524-1010",
@@ -120,7 +120,7 @@ const sucursales: Sucursal[] = [
   },
   {
     id: "mao",
-    name: "Sucursal Mao",
+    name: "Regional Mao",
     provincia: "Valverde",
     direccion: "Calle Duarte, Mao, Valverde",
     telefono: "809-572-2020",
@@ -133,7 +133,7 @@ const sucursales: Sucursal[] = [
   },
   {
     id: "higuey",
-    name: "Sucursal Higüey",
+    name: "Regional Higüey",
     provincia: "La Altagracia",
     direccion: "Av. Los Conucos, Higüey",
     telefono: "809-554-3030",
@@ -144,7 +144,7 @@ const sucursales: Sucursal[] = [
   },
   {
     id: "moca",
-    name: "Sucursal Moca",
+    name: "Regional Moca",
     provincia: "Espaillat",
     direccion: "Calle José Ma. Serra, Moca",
     telefono: "809-578-4040",
@@ -155,7 +155,7 @@ const sucursales: Sucursal[] = [
   },
   {
     id: "bonao",
-    name: "Sucursal Bonao",
+    name: "Regional Bonao",
     provincia: "Monseñor Nouel",
     direccion: "Av. Duarte, Bonao",
     telefono: "809-296-5050",
@@ -166,7 +166,7 @@ const sucursales: Sucursal[] = [
   },
   {
     id: "sanjuan",
-    name: "Sucursal San Juan de la Maguana",
+    name: "Regional San Juan de la Maguana",
     provincia: "San Juan",
     direccion: "Av. Independencia, San Juan de la Maguana",
     telefono: "809-557-6060",
@@ -177,15 +177,15 @@ const sucursales: Sucursal[] = [
   },
 ];
 
-const provincias = Array.from(new Set(sucursales.map((s) => s.provincia))).sort();
+const provincias = Array.from(new Set(regionales.map((s) => s.provincia))).sort();
 
 export default function Recepciones() {
   const [filterProvincia, setFilterProvincia] = useState("Todas");
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<Sucursal | null>(null);
+  const [selected, setSelected] = useState<Regional | null>(null);
   const [showNewUser, setShowNewUser] = useState(false);
 
-  const filtered = sucursales.filter((s) => {
+  const filtered = regionales.filter((s) => {
     const matchProvincia = filterProvincia === "Todas" || s.provincia === filterProvincia;
     const matchSearch = search === "" || s.name.toLowerCase().includes(search.toLowerCase()) || s.provincia.toLowerCase().includes(search.toLowerCase());
     return matchProvincia && matchSearch;
@@ -377,7 +377,7 @@ export default function Recepciones() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-bold text-lg" style={{ color: "#0D1B3E", fontFamily: "Nunito" }}>Recepciones</h2>
-          <p className="text-xs" style={{ color: "#5A7099" }}>Gestiona las recepciones de cada sucursal de SeNaSa a nivel nacional. Cada recepción solo ve sus propias visitas y usuarios.</p>
+          <p className="text-xs" style={{ color: "#5A7099" }}>Gestiona las recepciones de cada regional de SeNaSa a nivel nacional. Cada recepción solo ve sus propias visitas y usuarios.</p>
         </div>
         <div className="flex items-center gap-3">
           <select
