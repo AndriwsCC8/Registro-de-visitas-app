@@ -4,6 +4,7 @@ import type { AppUser } from "../App";
 type Status = "Activa" | "Completada" | "Cancelada" | "Pendiente";
 type VisitorType = "Ciudadano" | "Invitado" | "Reunión institucional" | "Proveedor" | "Consultor" | "Contratista" | "Contratista permanente" | "Autoridad" | "Tecnico";
 type AutomaticStatus = "Activo" | "Pendiente de salida" | "Salida confirmada" | "Excedió tiempo permitido";
+type DateFilter = "Hoy" | "Ayer" | "Esta semana" | "Este mes" | "Fecha específica";
 
 const visitorTypes: { label: VisitorType; defaultMinutes: number | null }[] = [
   { label: "Ciudadano", defaultMinutes: 60 },
@@ -31,8 +32,45 @@ function getCurrentTime() {
   return new Date().toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
+function getLocalDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function getDateFilterRange(filter: DateFilter, referenceDate: Date, specificDate: string) {
+  const start = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+  const end = new Date(start);
+
+  if (filter === "Ayer") {
+    start.setDate(start.getDate() - 1);
+    end.setDate(end.getDate() - 1);
+  } else if (filter === "Esta semana") {
+    const dayOfWeek = start.getDay();
+    const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    start.setDate(start.getDate() - daysSinceMonday);
+    end.setDate(start.getDate() + 6);
+  } else if (filter === "Este mes") {
+    start.setDate(1);
+    end.setMonth(end.getMonth() + 1, 0);
+  } else if (filter === "Fecha específica" && specificDate) {
+    const [year, month, day] = specificDate.split("-").map(Number);
+    return { start: new Date(year, month - 1, day), end: new Date(year, month - 1, day) };
+  }
+
+  return { start, end };
+}
+
+function isVisitInDateFilter(visit: Visit, filter: DateFilter, referenceDate: Date, specificDate: string) {
+  const visitDate = getLocalDateKey(new Date(visit.entryAt));
+  const { start, end } = getDateFilterRange(filter, referenceDate, specificDate);
+  const startKey = getLocalDateKey(start);
+  const endKey = getLocalDateKey(end);
+  return visitDate >= startKey && visitDate <= endKey;
+}
+
 function getExpectedExitAt(visit: Visit) {
-  if (visit.estimatedMinutes === null) return null;
+  if (visit.estimatedMinutes === null) {
+    return visit.endDate ? new Date(`${visit.endDate}T23:59:59`) : null;
+  }
   const expectedExit = new Date(visit.entryAt);
   expectedExit.setMinutes(expectedExit.getMinutes() + visit.estimatedMinutes);
 
@@ -47,6 +85,10 @@ function getExpectedExitAt(visit: Visit) {
 function getAutomaticStatus(visit: Visit, now: Date): AutomaticStatus {
   if (visit.exitConfirmed === "Sí") return "Salida confirmada";
   if (visit.status === "Pendiente") return "Pendiente de salida";
+
+  if (visit.estimatedMinutes === null && visit.endDate && getLocalDateKey(now) >= visit.endDate) {
+    return "Excedió tiempo permitido";
+  }
 
   const expectedExit = getExpectedExitAt(visit);
   if (expectedExit && now.getTime() > expectedExit.getTime() + ALERT_TOLERANCE_MINUTES * 60_000) {
@@ -157,6 +199,8 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
   const [form, setForm] = useState<FormData>(empty);
   const [formError, setFormError] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("Todas");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("Hoy");
+  const [specificDate, setSpecificDate] = useState("");
   const [search, setSearch] = useState("");
   const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
 
@@ -170,14 +214,18 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
 
   const filtered = visits.filter((v) => {
     const matchStatus = filterStatus === "Todas" || v.status === filterStatus;
+    const matchDate = dateFilter !== "Fecha específica" || specificDate
+      ? isVisitInDateFilter(v, dateFilter, now, specificDate)
+      : false;
     const matchSearch = search === "" || v.name.toLowerCase().includes(search.toLowerCase()) || v.cedula.includes(search);
     const matchBranch = user.role === "Administrador" || v.branch === user.branch;
-    return matchStatus && matchSearch && matchBranch;
+    return matchDate && matchStatus && matchSearch && matchBranch;
   });
 
   const overdueVisits = visits.filter((visit) => {
     const visibleToUser = user.role === "Administrador" || visit.branch === user.branch;
-    return visibleToUser && getAutomaticStatus(visit, now) === "Excedió tiempo permitido";
+    const isCurrentDay = isVisitInDateFilter(visit, "Hoy", now, "");
+    return visibleToUser && isCurrentDay && getAutomaticStatus(visit, now) === "Excedió tiempo permitido";
   });
 
   // Un carnet solo puede reutilizarse una vez se registra la salida de quien lo tenía asignado.
@@ -334,6 +382,33 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
           ))}
         </div>
         <div className="flex items-center gap-3">
+          <select
+            value={dateFilter}
+            onChange={(e) => {
+              const nextFilter = e.target.value as DateFilter;
+              setDateFilter(nextFilter);
+              if (nextFilter !== "Fecha específica") setSpecificDate("");
+            }}
+            className="px-3 py-2 rounded-xl text-sm border outline-none"
+            style={{ borderColor: "#D1DDED", background: "#fff", color: "#0D1B3E" }}
+            aria-label="Filtrar visitas por período"
+          >
+            <option value="Hoy">Hoy</option>
+            <option value="Ayer">Ayer</option>
+            <option value="Esta semana">Esta semana</option>
+            <option value="Este mes">Este mes</option>
+            <option value="Fecha específica">Fecha específica</option>
+          </select>
+          {dateFilter === "Fecha específica" && (
+            <input
+              type="date"
+              value={specificDate}
+              onChange={(e) => setSpecificDate(e.target.value)}
+              className="px-3 py-2 rounded-xl text-sm border outline-none"
+              style={{ borderColor: "#D1DDED", background: "#fff", color: "#0D1B3E" }}
+              aria-label="Seleccionar fecha de visitas"
+            />
+          )}
           <div className="relative">
             <input
               value={search}
@@ -455,9 +530,11 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
             <span className="material-symbols-outlined" style={{ fontSize: 40 }}>search_off</span>
             <p className="text-sm mt-2">No se encontraron visitas</p>
             <p className="text-xs mt-1">
-              {search || filterStatus !== "Todas"
-                ? "Prueba cambiar la búsqueda o el filtro de estado."
-                : `No hay visitas demo registradas para ${user.branch}.`}
+              {dateFilter === "Fecha específica" && !specificDate
+                ? "Selecciona una fecha para consultar las visitas."
+                : search || filterStatus !== "Todas"
+                  ? "Prueba cambiar la fecha, búsqueda o filtro de estado."
+                  : `No hay visitas registradas para ${user.branch} en el período seleccionado.`}
             </p>
           </div>
         )}
@@ -637,6 +714,7 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
                   ["Teléfono", selectedVisit.phone],
                   ["Entrada", selectedVisit.entry],
                   ["Salida", selectedVisit.exit],
+                  ["Observaciones", selectedVisit.notes || "Sin observaciones"],
                   selectedVisit.equipment ? ["Equipo", selectedVisit.equipment] : null,
                 ].filter((row): row is [string, string] => row !== null).map(([k, val]) => (
                   <div key={k} className="rounded-xl p-3" style={{ background: "#F8FAFC" }}>
