@@ -18,7 +18,8 @@ const visitorTypes: { label: VisitorType; defaultMinutes: number | null }[] = [
   { label: "Tecnico", defaultMinutes: 240 },
 ];
 
-const ALERT_TOLERANCE_MINUTES = 60;
+// Sin tolerancia: la alerta depende únicamente de si ya pasó la hora estimada de salida.
+const ALERT_TOLERANCE_MINUTES = 0;
 
 function formatDuration(minutes: number | null) {
   if (minutes === null) return "Sin alerta automática";
@@ -102,6 +103,8 @@ interface Visit {
   id: string;
   name: string;
   cedula: string;
+  passport?: string;
+  email?: string;
   phone: string;
   host: string;
   gerencia?: string;
@@ -172,7 +175,7 @@ const legacyStatusColors: Record<Status, { bg: string; color: string }> = {
 };
 
 interface FormData {
-  name: string; cedula: string; phone: string; gerencia: string; dept: string; host: string;
+  name: string; cedula: string; passport: string; email: string; phone: string; gerencia: string; dept: string; host: string;
   purpose: string; purposeDetail: string; piso: string; carnet: string; notes: string;
   visitorType: VisitorType | ""; estimatedMinutes: number | null; endDate: string;
   entryTime: string;
@@ -182,7 +185,7 @@ interface FormData {
 }
 
 const empty: FormData = {
-  name: "", cedula: "", phone: "", gerencia: "", dept: "", host: "",
+  name: "", cedula: "", passport: "", email: "", phone: "", gerencia: "", dept: "", host: "",
   purpose: "", purposeDetail: "", piso: "", carnet: "", notes: "", visitorType: "", estimatedMinutes: null, endDate: "",
   equipmentDetails: {},
   hasEquipment: false, equipmentTypes: [], equipmentOtherDetail: "",
@@ -217,15 +220,15 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
     const matchDate = dateFilter !== "Fecha específica" || specificDate
       ? isVisitInDateFilter(v, dateFilter, now, specificDate)
       : false;
-    const matchSearch = search === "" || v.name.toLowerCase().includes(search.toLowerCase()) || v.cedula.includes(search);
+    const matchSearch = search === "" || v.name.toLowerCase().includes(search.toLowerCase()) || v.cedula.includes(search) || (v.passport ?? "").toLowerCase().includes(search.toLowerCase());
     const matchBranch = user.role === "Administrador" || v.branch === user.branch;
     return matchDate && matchStatus && matchSearch && matchBranch;
   });
 
+  // No se limita al día actual: alguien que entró ayer y sigue sin salida también debe alertar hoy.
   const overdueVisits = visits.filter((visit) => {
     const visibleToUser = user.role === "Administrador" || visit.branch === user.branch;
-    const isCurrentDay = isVisitInDateFilter(visit, "Hoy", now, "");
-    return visibleToUser && isCurrentDay && getAutomaticStatus(visit, now) === "Excedió tiempo permitido";
+    return visibleToUser && visit.status !== "Cancelada" && getAutomaticStatus(visit, now) === "Excedió tiempo permitido";
   });
 
   // Un carnet solo puede reutilizarse una vez se registra la salida de quien lo tenía asignado.
@@ -286,8 +289,8 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
   };
 
   const handleSubmit = () => {
-    if (!form.name || !form.cedula || !form.host || !form.carnet || !form.piso || !form.purpose || !form.visitorType) {
-      setFormError("Completa todos los campos obligatorios.");
+    if (!form.name || (!form.cedula && !form.passport) || !form.host || !form.carnet || !form.piso || !form.purpose || !form.visitorType) {
+      setFormError("Completa todos los campos obligatorios. Indica cédula o pasaporte.");
       return;
     }
     if (form.visitorType === "Contratista permanente" && !form.endDate) {
@@ -329,6 +332,8 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
       id: `V-${String(visits.length + 235).padStart(5, "0")}`,
       name: form.name,
       cedula: form.cedula,
+      passport: form.passport || undefined,
+      email: form.email || undefined,
       phone: form.phone,
       host: form.host,
       gerencia: showGerencia ? form.gerencia : undefined,
@@ -463,7 +468,7 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
         <table className="w-full">
           <thead>
             <tr style={{ background: "#F8FAFC" }}>
-                {["ID", "Visitante", "Cédula", "Persona a quien visita", "Departamento", "Motivo", "Entrada", "Salida", "Carnet", "Tipo de visitante", "Tiempo estimado", "Salida Confirmada", "Estado", "Acción"].map((h) => (
+                {["ID", "Visitante", "Identificación", "Persona a quien visita", "Departamento", "Motivo", "Entrada", "Salida", "Carnet", "Tipo de visitante", "Tiempo estimado", "Salida Confirmada", "Estado", "Acción"].map((h) => (
                 <th key={h} className="px-4 py-3 text-left text-xs font-semibold" style={{ color: "#5A7099" }}>{h}</th>
               ))}
             </tr>
@@ -494,7 +499,7 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs font-mono" style={{ color: "#5A7099" }}>{v.cedula}</td>
+                  <td className="px-4 py-3 text-xs font-mono" style={{ color: "#5A7099" }}>{v.cedula || (v.passport ? `Pasaporte: ${v.passport}` : "--")}</td>
                   <td className="px-4 py-3 text-sm" style={{ color: "#0D1B3E" }}>{v.host}</td>
                   <td className="px-4 py-3 text-xs" style={{ color: "#5A7099" }}>{v.dept}</td>
                   <td className="px-4 py-3 text-xs" style={{ color: "#5A7099" }}>{v.purpose}</td>
@@ -558,8 +563,30 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
               )}
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Nombre Completo *" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="Ej. Carlos Rodríguez" />
-                <Field label="Cédula *" value={form.cedula} onChange={(v) => setForm({ ...form, cedula: v })} placeholder="000-0000000-0" />
+                <div>
+                  <label className="block text-sm font-semibold mb-1.5" style={{ color: "#5A7099" }}>Cédula *</label>
+                  {form.passport ? (
+                    <div className="w-full px-3.5 py-2.5 rounded-xl border text-sm" style={{ borderColor: "#D1DDED", color: "#5A7099", background: "#F8FAFC" }}>
+                      Ya se registró un pasaporte.
+                    </div>
+                  ) : (
+                    <input value={form.cedula} onChange={(e) => setForm({ ...form, cedula: e.target.value })} placeholder="000-0000000-0"
+                      className="w-full px-3.5 py-2.5 rounded-xl border text-base outline-none focus:ring-2 transition-all" style={{ borderColor: "#D1DDED", color: "#0D1B3E" }} />
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1.5" style={{ color: "#5A7099" }}>Pasaporte</label>
+                  {form.cedula ? (
+                    <div className="w-full px-3.5 py-2.5 rounded-xl border text-sm" style={{ borderColor: "#D1DDED", color: "#5A7099", background: "#F8FAFC" }}>
+                      Ya se registró una cédula.
+                    </div>
+                  ) : (
+                    <input value={form.passport} onChange={(e) => setForm({ ...form, passport: e.target.value })} placeholder="Ej. A1234567"
+                      className="w-full px-3.5 py-2.5 rounded-xl border text-base outline-none focus:ring-2 transition-all" style={{ borderColor: "#D1DDED", color: "#0D1B3E" }} />
+                  )}
+                </div>
                 <Field label="Teléfono" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} placeholder="809-000-0000" />
+                <Field label="Correo Electrónico" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder="correo@ejemplo.com" />
                 <Field label="Número de Carnet *" value={form.carnet} onChange={(v) => setForm({ ...form, carnet: v })} placeholder="Ej. C-045" />
                 <SelectField label="Tipo de visitante *" value={form.visitorType} onChange={(v) => updateVisitorType(v as VisitorType | "")} options={visitorTypes.map((type) => type.label)} />
                 <div>
@@ -706,6 +733,9 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
                   ["Tipo de visitante", selectedVisit.visitorType],
                   ["Tiempo estimado", formatDuration(selectedVisit.estimatedMinutes)],
                   selectedVisit.endDate ? ["Fecha fin prevista", selectedVisit.endDate] : null,
+                  selectedVisit.cedula ? ["Cédula", selectedVisit.cedula] : null,
+                  selectedVisit.passport ? ["Pasaporte", selectedVisit.passport] : null,
+                  selectedVisit.email ? ["Correo Electrónico", selectedVisit.email] : null,
                   ["Persona a quien visita", selectedVisit.host],
                   selectedVisit.gerencia ? ["Gerencia", selectedVisit.gerencia] : null,
                   ["Departamento", selectedVisit.dept],

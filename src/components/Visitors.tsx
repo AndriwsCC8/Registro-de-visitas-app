@@ -18,6 +18,7 @@ interface Visitor {
   id: string;
   name: string;
   cedula: string;
+  passport?: string;
   phone: string;
   email: string;
   company: string;
@@ -83,7 +84,7 @@ export default function Visitors({ user }: { user: { name: string; role: string;
 
   const filtered = visitors.filter((v) => {
     const matchType = filter === "Todos" || v.type === filter;
-    const matchSearch = search === "" || v.name.toLowerCase().includes(search.toLowerCase()) || v.cedula.includes(search);
+    const matchSearch = search === "" || v.name.toLowerCase().includes(search.toLowerCase()) || v.cedula.includes(search) || (v.passport ?? "").toLowerCase().includes(search.toLowerCase());
     const matchBranch = user.role === "Administrador" || v.branch === user.branch;
     return matchType && matchSearch && matchBranch;
   });
@@ -230,7 +231,7 @@ export default function Visitors({ user }: { user: { name: string; role: string;
               </div>
 
               <div className="grid grid-cols-2 gap-3 mb-4">
-                {[["Cédula", selected.cedula], ["Teléfono", selected.phone], ["Empresa", selected.company], ["Total Visitas", String(selected.visits)], ["Última Visita", selected.lastVisit], ["Estado", selected.status]].map(([k, val]) => (
+                {[["Cédula", selected.cedula], selected.passport ? ["Pasaporte", selected.passport] : null, ["Teléfono", selected.phone], ["Correo Electrónico", selected.email], ["Empresa", selected.company], ["Total Visitas", String(selected.visits)], ["Última Visita", selected.lastVisit], ["Estado", selected.status]].filter((row): row is [string, string] => row !== null).map(([k, val]) => (
                   <div key={k} className="rounded-xl p-3" style={{ background: "#F8FAFC" }}>
                     <p className="text-xs mb-0.5" style={{ color: "#5A7099" }}>{k}</p>
                     <p className="font-semibold text-sm" style={{ color: "#0D1B3E" }}>{val}</p>
