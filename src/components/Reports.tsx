@@ -42,7 +42,7 @@ const reportList = [
   { name: "Reporte Anual 2025", type: "Excel", size: "4.1 MB", date: "15 Ene 2026", status: "Disponible" },
 ];
 
-export default function Reports() {
+export default function Reports({ canExport }: { canExport: boolean }) {
   const [tab, setTab] = useState<"graficas" | "reportes">("graficas");
   const [period, setPeriod] = useState("Sep 2026");
 
@@ -77,10 +77,10 @@ export default function Reports() {
             <option>Ago 2026</option>
             <option>Jul 2026</option>
           </select>
-          <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: "#00A651" }}>
+          {canExport && <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: "#00A651" }}>
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>download</span>
             Exportar
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -132,15 +132,15 @@ export default function Reports() {
         <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: "#D1DDED" }}>
           <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "#D1DDED" }}>
             <h3 className="font-bold" style={{ color: "#0D1B3E", fontFamily: "Nunito" }}>Reportes Disponibles</h3>
-            <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: "#00A651" }}>
+            {canExport && <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: "#00A651" }}>
               <span className="material-symbols-outlined" style={{ fontSize: 17 }}>add</span>
               Generar Reporte
-            </button>
+            </button>}
           </div>
           <table className="w-full">
             <thead>
               <tr style={{ background: "#F8FAFC" }}>
-                {["Nombre", "Tipo", "Tamaño", "Fecha", "Estado", "Acción"].map((h) => (
+                {["Nombre", "Tipo", "Tamaño", "Fecha", "Estado", "Acción"].filter((h) => canExport || h !== "Acción").map((h) => (
                   <th key={h} className="px-5 py-3 text-left text-xs font-semibold" style={{ color: "#5A7099" }}>{h}</th>
                 ))}
               </tr>
@@ -167,7 +167,7 @@ export default function Reports() {
                   <td className="px-5 py-3">
                     <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: "#E8F5EE", color: "#00A651" }}>{r.status}</span>
                   </td>
-                  <td className="px-5 py-3">
+                  {canExport && <td className="px-5 py-3">
                     <div className="flex gap-2">
                       <button className="p-1.5 rounded-lg hover:bg-[#E8EFF8] transition-colors">
                         <span className="material-symbols-outlined" style={{ fontSize: 18, color: "#00A651" }}>download</span>
@@ -176,7 +176,7 @@ export default function Reports() {
                         <span className="material-symbols-outlined" style={{ fontSize: 18, color: "#5A7099" }}>share</span>
                       </button>
                     </div>
-                  </td>
+                  </td>}
                 </tr>
               ))}
             </tbody>

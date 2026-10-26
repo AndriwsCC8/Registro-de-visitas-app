@@ -2,36 +2,23 @@ import { useState } from "react";
 import senasaLogo from "../assets/logoSeNaSa.jpg";
 import backgroundImage from "../assets/background SeNaSa.jpg";
 import type { AppUser } from "../App";
+import { authenticateDemo } from "../demoAccounts";
 
 export default function Login({ onLogin }: { onLogin: (user: AppUser) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (username && password) {
-      // Mock login logic based on username
-      let role = "Recepcionista";
-      let branch = "Sede Central";
-      let permissions: string[] = [];
-
-      if (username === "admin") {
-        role = "Administrador";
-        permissions = ["recepciones"];
-      } else if (username === "rec_norte") {
-        role = "Recepcionista";
-        branch = "Sucursal Norte";
-        permissions = ["recepciones"];
-      } else if (username === "rec_naco") {
-        role = "Recepcionista";
-        branch = "Naco";
-        permissions = ["recepciones"];
-      } else if (username === "supervisor") {
-        role = "Supervisor";
-        permissions = ["recepciones"];
+      const user = authenticateDemo(username, password);
+      if (!user) {
+        setError("Usuario o contraseña incorrectos.");
+        setPassword("");
+        return;
       }
-
-      onLogin({ name: username, role, branch, permissions });
+      onLogin(user);
     }
   };
 
@@ -58,6 +45,11 @@ export default function Login({ onLogin }: { onLogin: (user: AppUser) => void })
           <p className="text-sm text-[#5A7099]">Registro de Visitas</p>
         </div>
         <form onSubmit={handleLogin} className="space-y-4">
+          {error && (
+            <div className="rounded-xl px-4 py-2.5 text-sm font-semibold" style={{ background: "#FEE2E2", color: "#DC2626" }} role="alert">
+              {error}
+            </div>
+          )}
           <div>
             <label className="block text-xs font-semibold mb-1 text-[#5A7099]">Usuario</label>
             <input

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { rolePermissions } from "../permissions";
 
 interface User {
   id: string;
@@ -23,14 +24,7 @@ const roleColors: Record<string, { bg: string; color: string }> = {
   "Solo Lectura": { bg: "#F1F5F9", color: "#5A7099" },
 };
 
-const permissions: Record<string, string[]> = {
-  Administrador: ["Ver Dashboard", "Registrar Visitas", "Gestionar Visitantes", "Ver Reportes", "Exportar Reportes", "Gestionar Usuarios", "Configurar Sistema", "Ver Logs de Auditoría"],
-  Supervisor: ["Ver Dashboard", "Registrar Visitas", "Gestionar Visitantes", "Ver Reportes", "Exportar Reportes"],
-  Recepcionista: ["Ver Dashboard", "Registrar Visitas", "Gestionar Visitantes"],
-  Seguridad: ["Ver Dashboard", "Registrar Visitas", "Ver Visitantes"],
-  Auditor: ["Ver Dashboard", "Ver Reportes", "Exportar Reportes", "Ver Logs de Auditoría"],
-  "Solo Lectura": ["Ver Dashboard", "Ver Reportes"],
-};
+const permissions = rolePermissions;
 
 const users: User[] = [
   { id: "USR-001", name: "Ana Martínez", email: "a.martinez@senasa.gob.do", role: "Administrador", dept: "Administración", lastLogin: "Hoy 09:14", status: "Activo", avatar: "AM" },

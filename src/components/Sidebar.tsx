@@ -1,4 +1,4 @@
-import type { View } from "../App";
+import type { View, AppUser } from "../App";
 import senasaLogo from "../assets/logoSeNaSa.jpg";
 
 interface NavItem {
@@ -23,11 +23,12 @@ interface Props {
   view: View;
   setView: (v: View) => void;
   open: boolean;
-  canViewRecepciones: boolean;
+  allowedViews: View[];
+  user: AppUser;
 }
 
-export default function Sidebar({ view, setView, open, canViewRecepciones }: Props) {
-  const items = navItems.filter((item) => item.id !== "recepciones" || canViewRecepciones);
+export default function Sidebar({ view, setView, open, allowedViews, user }: Props) {
+  const items = navItems.filter((item) => allowedViews.includes(item.id));
 
   return (
     <aside
@@ -116,12 +117,12 @@ export default function Sidebar({ view, setView, open, canViewRecepciones }: Pro
             className="shrink-0 flex items-center justify-center rounded-full text-white font-bold text-sm"
             style={{ width: 36, height: 36, background: "#00A651" }}
           >
-            AM
+            {user.name.substring(0, 2).toUpperCase()}
           </div>
           {open && (
             <div className="min-w-0">
-              <p className="text-white text-sm font-semibold truncate">Ana Martínez</p>
-              <p className="text-white/50 text-xs truncate">Administrador</p>
+              <p className="text-white text-sm font-semibold truncate">{user.name}</p>
+              <p className="text-white/50 text-xs truncate">{user.role}</p>
             </div>
           )}
         </div>

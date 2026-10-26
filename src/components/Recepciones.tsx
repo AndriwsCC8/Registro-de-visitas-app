@@ -179,7 +179,7 @@ const regionales: Regional[] = [
 
 const provincias = Array.from(new Set(regionales.map((s) => s.provincia))).sort();
 
-export default function Recepciones() {
+export default function Recepciones({ canManageUsers }: { canManageUsers: boolean }) {
   const [filterProvincia, setFilterProvincia] = useState("Todas");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Regional | null>(null);
@@ -209,14 +209,14 @@ export default function Recepciones() {
               <p className="text-xs" style={{ color: "#5A7099" }}>{selected.direccion} · {selected.telefono}</p>
             </div>
           </div>
-          <button
+          {canManageUsers && <button
             onClick={() => setShowNewUser(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
             style={{ background: "#00A651" }}
           >
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person_add</span>
             Nuevo Usuario en esta Recepción
-          </button>
+          </button>}
         </div>
 
         {/* Stats */}
@@ -324,7 +324,7 @@ export default function Recepciones() {
         </div>
 
         {/* Modal demo: nuevo usuario en la recepción (solo vista, sin funcionalidad) */}
-        {showNewUser && (
+        {canManageUsers && showNewUser && (
           <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.4)" }}>
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl mx-4 overflow-hidden">
               <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "#D1DDED", background: "#00A651" }}>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { can } from "../permissions";
 
 interface HistoryEntry {
   id: string;
@@ -76,7 +77,8 @@ const typeColors: Record<string, { bg: string; color: string }> = {
   Contratista: { bg: "#FEF3C7", color: "#F59E0B" },
 };
 
-export default function Visitors({ user }: { user: { name: string; role: string; branch: string } }) {
+export default function Visitors({ user }: { user: { name: string; role: string; branch: string; permissions: string[] } }) {
+  const canManage = can(user, "Gestionar Visitantes");
   const [filter, setFilter] = useState("Todos");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Visitor | null>(null);
@@ -243,9 +245,9 @@ export default function Visitors({ user }: { user: { name: string; role: string;
                 <button onClick={() => setHistoryVisitor(selected)} className="flex-1 py-2.5 rounded-xl text-sm font-semibold border" style={{ borderColor: "#D1DDED", color: "#5A7099" }}>
                   Ver Historial
                 </button>
-                <button className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: selected.status === "Activo" ? "#DC2626" : "#00A651" }}>
+                {canManage && <button className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: selected.status === "Activo" ? "#DC2626" : "#00A651" }}>
                   {selected.status === "Activo" ? "Bloquear" : "Activar"}
-                </button>
+                </button>}
               </div>
             </div>
           </div>

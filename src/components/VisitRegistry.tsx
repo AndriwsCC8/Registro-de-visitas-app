@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AppUser } from "../App";
+import { can } from "../permissions";
 
 type Status = "Activa" | "Completada" | "Cancelada" | "Pendiente";
 type VisitorType = "Ciudadano" | "Invitado" | "Reunión institucional" | "Proveedor" | "Consultor" | "Contratista" | "Contratista permanente" | "Autoridad" | "Tecnico";
@@ -213,6 +214,7 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
   }, []);
 
   const showGerencia = GERENCIA_BRANCHES.includes(user.branch);
+  const canRegister = can(user, "Registrar Visitas");
   const floors = user.branch === "Sede Central" ? centralFloors : [];
 
   const filtered = visits.filter((v) => {
@@ -289,6 +291,7 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
   };
 
   const handleSubmit = () => {
+    if (!canRegister) return;
     if (!form.name || (!form.cedula && !form.passport) || !form.host || !form.carnet || !form.piso || !form.purpose || !form.visitorType) {
       setFormError("Completa todos los campos obligatorios. Indica cédula o pasaporte.");
       return;
@@ -361,6 +364,7 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
   };
 
   const handleCheckout = (id: string) => {
+    if (!canRegister) return;
     setVisits(visits.map((v) => v.id === id ? { ...v, status: "Completada" as Status, automaticStatus: "Salida confirmada", exit: new Date().toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" }), exitConfirmed: "Sí" } : v));
     setSelectedVisit(null);
   };
@@ -424,14 +428,14 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
             />
             <span className="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2" style={{ fontSize: 17, color: "#5A7099" }}>search</span>
           </div>
-          <button
+          {canRegister && <button
             onClick={() => setShowForm(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
             style={{ background: "#00A651" }}
           >
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
             Nueva Visita
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -515,7 +519,7 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
                     <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: sc.bg, color: sc.color }}>{automaticStatus}</span>
                   </td>
                   <td className="px-4 py-3">
-                    {v.exitConfirmed === "No" && v.status !== "Cancelada" && (
+                    {canRegister && v.exitConfirmed === "No" && v.status !== "Cancelada" && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleCheckout(v.id); }}
                         className="text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors"
@@ -753,7 +757,7 @@ export default function VisitRegistry({ user }: { user: AppUser }) {
                   </div>
                 ))}
               </div>
-              {selectedVisit.status === "Activa" && (
+              {canRegister && selectedVisit.status === "Activa" && (
                 <button
                   onClick={() => handleCheckout(selectedVisit.id)}
                   className="w-full mt-4 py-3 rounded-xl text-sm font-bold text-white"
